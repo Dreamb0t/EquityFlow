@@ -25,6 +25,7 @@ class PositionRow(Base):
     shares: Mapped[float] = mapped_column(Float)
     avg_cost: Mapped[float] = mapped_column(Float)
     opened_at: Mapped[date] = mapped_column(Date)
+    currency: Mapped[str] = mapped_column(String, default="USD", server_default="USD")
 
 
 class WatchlistRow(Base):
@@ -36,6 +37,7 @@ class WatchlistRow(Base):
     added_at: Mapped[date] = mapped_column(Date)
     note: Mapped[str] = mapped_column(String, default="")
     target_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str] = mapped_column(String, default="USD", server_default="USD")
 
 
 class PricePointRow(Base):

@@ -16,7 +16,10 @@ from stockapp.alerts.notifiers import EmailNotifier, InAppNotifier
 from stockapp.config.settings import settings
 from stockapp.data.repository import SqlRepository
 from stockapp.scrapers.balance_sheet_scraper import YFinanceBalanceSheetScraper
+from stockapp.scrapers.fx_scraper import YFinanceFxRateProvider
 from stockapp.scrapers.price_scraper import YFinancePriceScraper
+from stockapp.services.app_state import AppState
+from stockapp.services.currency_service import CurrencyService
 
 
 class Container:
@@ -24,6 +27,8 @@ class Container:
         self.repository = SqlRepository()
         self.price_scraper = YFinancePriceScraper()
         self.balance_sheet_scraper = YFinanceBalanceSheetScraper()
+        self.currency_service = CurrencyService(YFinanceFxRateProvider())
+        self.app_state = AppState()
         self.in_app_notifier = InAppNotifier()
         self.notifiers = [self.in_app_notifier]
 

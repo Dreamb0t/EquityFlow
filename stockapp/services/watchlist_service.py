@@ -16,18 +16,20 @@ class WatchlistService:
         exchange: str | None = None,
         note: str = "",
         target_price: float | None = None,
-    ) -> None:
-        self._repo.add_watchlist_item(
+        currency: str = "USD",
+    ) -> int:
+        return self._repo.add_watchlist_item(
             WatchlistItem(
                 ticker=Ticker(symbol, exchange),
                 added_at=date.today(),
                 note=note,
                 target_price=target_price,
+                currency=currency,
             )
         )
 
-    def remove(self, symbol: str, exchange: str | None = None) -> None:
-        self._repo.remove_watchlist_item(Ticker(symbol, exchange))
+    def remove(self, item_id: int) -> None:
+        self._repo.remove_watchlist_item(item_id)
 
     def list(self) -> list[WatchlistItem]:
         return self._repo.list_watchlist()

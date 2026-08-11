@@ -35,5 +35,9 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = 15
     scraper_user_agent: str = "stockapp/0.1 (personal use)"
 
+    # Currency — default display currency on first run; after that the user's
+    # choice is persisted by services/app_state.py, not re-read from here.
+    display_currency: str = "USD"
+
 
 settings = Settings()

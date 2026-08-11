@@ -17,19 +17,46 @@ class PortfolioService:
         self._repo = repository
 
     def add_position(
-        self, symbol: str, shares: float, avg_cost: float, exchange: str | None = None
-    ) -> None:
-        self._repo.add_position(
+        self,
+        symbol: str,
+        shares: float,
+        avg_cost: float,
+        currency: str,
+        exchange: str | None = None,
+    ) -> int:
+        return self._repo.add_position(
             Position(
                 ticker=Ticker(symbol, exchange),
                 shares=shares,
                 avg_cost=avg_cost,
                 opened_at=date.today(),
+                currency=currency,
             )
         )
 
-    def remove_position(self, symbol: str, exchange: str | None = None) -> None:
-        self._repo.remove_position(Ticker(symbol, exchange))
+    def update_position(
+        self,
+        position_id: int,
+        symbol: str,
+        shares: float,
+        avg_cost: float,
+        currency: str,
+        exchange: str | None = None,
+        opened_at: date | None = None,
+    ) -> None:
+        self._repo.update_position(
+            Position(
+                id=position_id,
+                ticker=Ticker(symbol, exchange),
+                shares=shares,
+                avg_cost=avg_cost,
+                opened_at=opened_at or date.today(),
+                currency=currency,
+            )
+        )
+
+    def remove_position(self, position_id: int) -> None:
+        self._repo.remove_position(position_id)
 
     def list_positions(self) -> list[Position]:
         return self._repo.list_positions()

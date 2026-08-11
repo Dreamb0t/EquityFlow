@@ -62,12 +62,20 @@ class BalanceSheetSnapshot:
 
 @dataclass
 class Position:
-    """A stock the user actually owns."""
+    """A stock the user actually owns.
+
+    `currency` is the ISO code `avg_cost` is denominated in — set by the user
+    at entry time (defaults to the app's display currency), not auto-detected,
+    since what a broker actually charged can differ from a ticker's home
+    exchange currency (e.g. FX-hedged purchases).
+    """
 
     ticker: Ticker
     shares: float
     avg_cost: float
     opened_at: date
+    currency: str = "USD"
+    id: Optional[int] = None
 
 
 @dataclass
@@ -76,6 +84,8 @@ class WatchlistItem:
     added_at: date
     note: str = ""
     target_price: Optional[float] = None
+    currency: str = "USD"
+    id: Optional[int] = None
 
 
 @dataclass

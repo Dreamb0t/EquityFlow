@@ -28,11 +28,11 @@ class YFinancePriceScraper(PriceScraper):
         )
 
     def get_price_history(
-        self, ticker: Ticker, start: date, end: date
+        self, ticker: Ticker, start: date, end: date, interval: str = "1d"
     ) -> list[PricePoint]:
         import yfinance as yf
 
-        df = yf.Ticker(str(ticker)).history(start=start, end=end)
+        df = yf.Ticker(str(ticker)).history(start=start, end=end, interval=interval)
         return [
             PricePoint(
                 ticker=ticker,
@@ -45,3 +45,10 @@ class YFinancePriceScraper(PriceScraper):
             )
             for idx, row in df.iterrows()
         ]
+
+    def get_currency(self, ticker: Ticker) -> str:
+        import yfinance as yf
+
+        info = yf.Ticker(str(ticker)).fast_info
+        currency = info.get("currency") if hasattr(info, "get") else None
+        return (currency or "USD").upper()

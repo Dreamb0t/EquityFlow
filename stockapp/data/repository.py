@@ -32,17 +32,32 @@ from stockapp.data.orm_models import (
 
 class SqlRepository(Repository):
     # --- Positions ---
-    def add_position(self, position: Position) -> None:
+    def add_position(self, position: Position) -> int:
         with get_session() as s:
-            s.add(
-                PositionRow(
-                    symbol=position.ticker.symbol,
-                    exchange=position.ticker.exchange,
-                    shares=position.shares,
-                    avg_cost=position.avg_cost,
-                    opened_at=position.opened_at,
-                )
+            row = PositionRow(
+                symbol=position.ticker.symbol,
+                exchange=position.ticker.exchange,
+                shares=position.shares,
+                avg_cost=position.avg_cost,
+                opened_at=position.opened_at,
+                currency=position.currency,
             )
+            s.add(row)
+            s.flush()
+            return row.id
+
+    def update_position(self, position: Position) -> None:
+        if position.id is None:
+            raise ValueError("update_position requires an id")
+        with get_session() as s:
+            row = s.get(PositionRow, position.id)
+            if row is None:
+                raise ValueError(f"No position with id {position.id}")
+            row.symbol = position.ticker.symbol
+            row.exchange = position.ticker.exchange
+            row.shares = position.shares
+            row.avg_cost = position.avg_cost
+            row.currency = position.currency
 
     def list_positions(self) -> list[Position]:
         with get_session() as s:
@@ -53,28 +68,43 @@ class SqlRepository(Repository):
                     shares=r.shares,
                     avg_cost=r.avg_cost,
                     opened_at=r.opened_at,
+                    currency=r.currency or "USD",
+                    id=r.id,
                 )
                 for r in rows
             ]
 
-    def remove_position(self, ticker: Ticker) -> None:
+    def remove_position(self, position_id: int) -> None:
         with get_session() as s:
-            s.query(PositionRow).filter_by(
-                symbol=ticker.symbol, exchange=ticker.exchange
-            ).delete()
+            s.query(PositionRow).filter_by(id=position_id).delete()
 
     # --- Watchlist ---
-    def add_watchlist_item(self, item: WatchlistItem) -> None:
+    def add_watchlist_item(self, item: WatchlistItem) -> int:
         with get_session() as s:
-            s.add(
-                WatchlistRow(
-                    symbol=item.ticker.symbol,
-                    exchange=item.ticker.exchange,
-                    added_at=item.added_at,
-                    note=item.note,
-                    target_price=item.target_price,
-                )
+            row = WatchlistRow(
+                symbol=item.ticker.symbol,
+                exchange=item.ticker.exchange,
+                added_at=item.added_at,
+                note=item.note,
+                target_price=item.target_price,
+                currency=item.currency,
             )
+            s.add(row)
+            s.flush()
+            return row.id
+
+    def update_watchlist_item(self, item: WatchlistItem) -> None:
+        if item.id is None:
+            raise ValueError("update_watchlist_item requires an id")
+        with get_session() as s:
+            row = s.get(WatchlistRow, item.id)
+            if row is None:
+                raise ValueError(f"No watchlist item with id {item.id}")
+            row.symbol = item.ticker.symbol
+            row.exchange = item.ticker.exchange
+            row.note = item.note
+            row.target_price = item.target_price
+            row.currency = item.currency
 
     def list_watchlist(self) -> list[WatchlistItem]:
         with get_session() as s:
@@ -85,15 +115,15 @@ class SqlRepository(Repository):
                     added_at=r.added_at,
                     note=r.note,
                     target_price=r.target_price,
+                    currency=r.currency or "USD",
+                    id=r.id,
                 )
                 for r in rows
             ]
 
-    def remove_watchlist_item(self, ticker: Ticker) -> None:
+    def remove_watchlist_item(self, item_id: int) -> None:
         with get_session() as s:
-            s.query(WatchlistRow).filter_by(
-                symbol=ticker.symbol, exchange=ticker.exchange
-            ).delete()
+            s.query(WatchlistRow).filter_by(id=item_id).delete()
 
     # --- Price history (cache of scraped data) ---
     def save_price_points(self, points: Iterable[PricePoint]) -> None:

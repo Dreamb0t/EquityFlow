@@ -33,8 +33,25 @@ class PriceScraper(ABC):
 
     @abstractmethod
     def get_price_history(
-        self, ticker: Ticker, start: date, end: date
-    ) -> list[PricePoint]: ...
+        self, ticker: Ticker, start: date, end: date, interval: str = "1d"
+    ) -> list[PricePoint]:
+        """interval follows yfinance conventions: '1d' for daily bars, '5m'/'1m'
+        for intraday (only available for recent dates)."""
+        ...
+
+    @abstractmethod
+    def get_currency(self, ticker: Ticker) -> str:
+        """ISO currency code the ticker actually trades in (e.g. 'USD', 'DKK') —
+        used to convert live/historical prices into the user's display currency."""
+        ...
+
+
+class FxRateProvider(ABC):
+    @abstractmethod
+    def get_rate(self, base: str, quote: str) -> float:
+        """Units of `quote` equal to 1 unit of `base` (e.g. base='USD',
+        quote='DKK' -> ~6.9)."""
+        ...
 
 
 class BalanceSheetScraper(ABC):
@@ -61,25 +78,32 @@ class Repository(ABC):
     """Persistence port. Concrete implementation lives in data/ (SQLite now,
     swappable for Postgres later with no change to services/)."""
 
-    # Positions (owned stocks)
+    # Positions (owned stocks) — identified by db row id so a symbol/exchange
+    # can be edited without losing identity.
     @abstractmethod
-    def add_position(self, position: Position) -> None: ...
+    def add_position(self, position: Position) -> int: ...
+
+    @abstractmethod
+    def update_position(self, position: Position) -> None: ...
 
     @abstractmethod
     def list_positions(self) -> list[Position]: ...
 
     @abstractmethod
-    def remove_position(self, ticker: Ticker) -> None: ...
+    def remove_position(self, position_id: int) -> None: ...
 
     # Watchlist
     @abstractmethod
-    def add_watchlist_item(self, item: WatchlistItem) -> None: ...
+    def add_watchlist_item(self, item: WatchlistItem) -> int: ...
+
+    @abstractmethod
+    def update_watchlist_item(self, item: WatchlistItem) -> None: ...
 
     @abstractmethod
     def list_watchlist(self) -> list[WatchlistItem]: ...
 
     @abstractmethod
-    def remove_watchlist_item(self, ticker: Ticker) -> None: ...
+    def remove_watchlist_item(self, item_id: int) -> None: ...
 
     # Cached market data
     @abstractmethod
