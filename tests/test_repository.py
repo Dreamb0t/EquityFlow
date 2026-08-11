@@ -107,3 +107,22 @@ def test_watchlist_round_trips_currency_and_id(repo):
 
     repo.remove_watchlist_item(item_id)
     assert repo.list_watchlist() == []
+
+
+def test_get_price_history_includes_same_day_timestamps(repo):
+    """Regression test: querying with end=date.today() must include rows
+    timestamped later today. SQLite compares the DateTime column against a
+    bare date string, and "2026-08-11T23:00:00" sorts AFTER "2026-08-11" —
+    so an unnormalized bound silently dropped today's data. See
+    SqlRepository.get_price_history."""
+    from datetime import datetime, time, timedelta
+
+    from stockapp.core.models import PricePoint, Ticker
+
+    ticker = Ticker("AAPL")
+    late_today = datetime.combine(date.today(), time(23, 0))
+    repo.save_price_points([PricePoint(ticker=ticker, timestamp=late_today, close=100.0)])
+
+    rows = repo.get_price_history(ticker, date.today() - timedelta(days=5), date.today())
+    assert len(rows) == 1
+    assert rows[0].timestamp == late_today

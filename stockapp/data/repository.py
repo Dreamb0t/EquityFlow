@@ -6,7 +6,7 @@ never to these ORM rows directly.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time
 from typing import Iterable, Optional
 
 from stockapp.core.interfaces import Repository
@@ -143,6 +143,15 @@ class SqlRepository(Repository):
                 )
 
     def get_price_history(self, ticker: Ticker, start, end) -> list[PricePoint]:
+        # start/end may be plain `date` objects (callers commonly pass
+        # date.today()). Comparing a DateTime column against a bare date
+        # string is a trap in SQLite: "2026-08-11T00:00:00" sorts AFTER the
+        # bare string "2026-08-11", so a same-day timestamp <= date.today()
+        # silently evaluates False and today's row vanishes from the range.
+        # Normalize to full-day bounds so "today" is actually included.
+        start = datetime.combine(start, time.min) if not isinstance(start, datetime) else start
+        end = datetime.combine(end, time.max) if not isinstance(end, datetime) else end
+
         with get_session() as s:
             rows = (
                 s.query(PricePointRow)

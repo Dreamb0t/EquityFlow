@@ -170,16 +170,32 @@ class DashboardTab(QWidget):
             self.chart.plot_series(series, self._app_state.display_currency)
             return
 
-        try:
-            rate = self._currency_service.get_rate(
-                self._last_native_currency, self._app_state.display_currency
-            )
-        except Exception:
-            rate = 1.0
+        display_currency = self._app_state.display_currency
+        rate = 1.0
+        shown_currency = self._last_native_currency
+
+        if self._last_native_currency != display_currency:
+            try:
+                rate = self._currency_service.get_rate(
+                    self._last_native_currency, display_currency
+                )
+                shown_currency = display_currency
+            except Exception as exc:
+                # Don't silently fall back to rate=1.0 while still labeling
+                # the axis as the target currency — that's exactly the "title
+                # changed but values didn't" bug. Keep showing native prices
+                # and say so.
+                QMessageBox.warning(
+                    self,
+                    "Currency conversion failed",
+                    f"Could not fetch the {self._last_native_currency}->"
+                    f"{display_currency} exchange rate ({exc}). Showing prices "
+                    f"in {self._last_native_currency} instead.",
+                )
 
         self.stats_label.setText(
             f"{series.ticker}: {series.total_pct_change:+.1f}% over period · "
             f"volatility {series.volatility_pct:.1f}% · shown in "
-            f"{self._app_state.display_currency} (native: {self._last_native_currency})"
+            f"{shown_currency} (native: {self._last_native_currency})"
         )
-        self.chart.plot_series(series, self._app_state.display_currency, rate)
+        self.chart.plot_series(series, shown_currency, rate)
