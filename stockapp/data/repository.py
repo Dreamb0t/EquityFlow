@@ -1,0 +1,214 @@
+"""
+Concrete Repository implementation backed by SQLite/SQLAlchemy.
+Everything above this file (services/) talks to the Repository interface only,
+never to these ORM rows directly.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Iterable, Optional
+
+from stockapp.core.interfaces import Repository
+from stockapp.core.models import (
+    Alert,
+    AlertSeverity,
+    AlertType,
+    BalanceSheetSnapshot,
+    PricePoint,
+    Position,
+    Ticker,
+    WatchlistItem,
+)
+from stockapp.data.database import get_session
+from stockapp.data.orm_models import (
+    AlertRow,
+    BalanceSheetRow,
+    PositionRow,
+    PricePointRow,
+    WatchlistRow,
+)
+
+
+class SqlRepository(Repository):
+    # --- Positions ---
+    def add_position(self, position: Position) -> None:
+        with get_session() as s:
+            s.add(
+                PositionRow(
+                    symbol=position.ticker.symbol,
+                    exchange=position.ticker.exchange,
+                    shares=position.shares,
+                    avg_cost=position.avg_cost,
+                    opened_at=position.opened_at,
+                )
+            )
+
+    def list_positions(self) -> list[Position]:
+        with get_session() as s:
+            rows = s.query(PositionRow).all()
+            return [
+                Position(
+                    ticker=Ticker(r.symbol, r.exchange),
+                    shares=r.shares,
+                    avg_cost=r.avg_cost,
+                    opened_at=r.opened_at,
+                )
+                for r in rows
+            ]
+
+    def remove_position(self, ticker: Ticker) -> None:
+        with get_session() as s:
+            s.query(PositionRow).filter_by(
+                symbol=ticker.symbol, exchange=ticker.exchange
+            ).delete()
+
+    # --- Watchlist ---
+    def add_watchlist_item(self, item: WatchlistItem) -> None:
+        with get_session() as s:
+            s.add(
+                WatchlistRow(
+                    symbol=item.ticker.symbol,
+                    exchange=item.ticker.exchange,
+                    added_at=item.added_at,
+                    note=item.note,
+                    target_price=item.target_price,
+                )
+            )
+
+    def list_watchlist(self) -> list[WatchlistItem]:
+        with get_session() as s:
+            rows = s.query(WatchlistRow).all()
+            return [
+                WatchlistItem(
+                    ticker=Ticker(r.symbol, r.exchange),
+                    added_at=r.added_at,
+                    note=r.note,
+                    target_price=r.target_price,
+                )
+                for r in rows
+            ]
+
+    def remove_watchlist_item(self, ticker: Ticker) -> None:
+        with get_session() as s:
+            s.query(WatchlistRow).filter_by(
+                symbol=ticker.symbol, exchange=ticker.exchange
+            ).delete()
+
+    # --- Price history (cache of scraped data) ---
+    def save_price_points(self, points: Iterable[PricePoint]) -> None:
+        with get_session() as s:
+            for p in points:
+                s.add(
+                    PricePointRow(
+                        symbol=p.ticker.symbol,
+                        exchange=p.ticker.exchange,
+                        timestamp=p.timestamp,
+                        open=p.open,
+                        high=p.high,
+                        low=p.low,
+                        close=p.close,
+                        volume=p.volume,
+                    )
+                )
+
+    def get_price_history(self, ticker: Ticker, start, end) -> list[PricePoint]:
+        with get_session() as s:
+            rows = (
+                s.query(PricePointRow)
+                .filter(
+                    PricePointRow.symbol == ticker.symbol,
+                    PricePointRow.exchange == ticker.exchange,
+                    PricePointRow.timestamp >= start,
+                    PricePointRow.timestamp <= end,
+                )
+                .order_by(PricePointRow.timestamp)
+                .all()
+            )
+            return [
+                PricePoint(
+                    ticker=ticker,
+                    timestamp=r.timestamp,
+                    close=r.close,
+                    open=r.open,
+                    high=r.high,
+                    low=r.low,
+                    volume=r.volume,
+                )
+                for r in rows
+            ]
+
+    # --- Balance sheets ---
+    def save_balance_sheets(self, snapshots: Iterable[BalanceSheetSnapshot]) -> None:
+        with get_session() as s:
+            for b in snapshots:
+                s.add(
+                    BalanceSheetRow(
+                        symbol=b.ticker.symbol,
+                        exchange=b.ticker.exchange,
+                        period_end=b.period_end,
+                        total_assets=b.total_assets,
+                        total_liabilities=b.total_liabilities,
+                        total_equity=b.total_equity,
+                        cash_and_equivalents=b.cash_and_equivalents,
+                        total_debt=b.total_debt,
+                        source=b.source,
+                        raw=b.raw,
+                    )
+                )
+
+    def get_balance_sheet_history(self, ticker: Ticker) -> list[BalanceSheetSnapshot]:
+        with get_session() as s:
+            rows = (
+                s.query(BalanceSheetRow)
+                .filter_by(symbol=ticker.symbol, exchange=ticker.exchange)
+                .order_by(BalanceSheetRow.period_end)
+                .all()
+            )
+            return [
+                BalanceSheetSnapshot(
+                    ticker=ticker,
+                    period_end=r.period_end,
+                    total_assets=r.total_assets,
+                    total_liabilities=r.total_liabilities,
+                    total_equity=r.total_equity,
+                    cash_and_equivalents=r.cash_and_equivalents,
+                    total_debt=r.total_debt,
+                    source=r.source,
+                    raw=r.raw or {},
+                )
+                for r in rows
+            ]
+
+    # --- Alerts ---
+    def save_alert(self, alert: Alert) -> None:
+        with get_session() as s:
+            s.add(
+                AlertRow(
+                    symbol=alert.ticker.symbol,
+                    exchange=alert.ticker.exchange,
+                    type=alert.type.value,
+                    severity=alert.severity.value,
+                    message=alert.message,
+                    triggered_at=alert.triggered_at,
+                    acknowledged=alert.acknowledged,
+                )
+            )
+
+    def list_alerts(self, since: Optional[datetime] = None) -> list[Alert]:
+        with get_session() as s:
+            q = s.query(AlertRow)
+            if since:
+                q = q.filter(AlertRow.triggered_at >= since)
+            rows = q.order_by(AlertRow.triggered_at.desc()).all()
+            return [
+                Alert(
+                    ticker=Ticker(r.symbol, r.exchange),
+                    type=AlertType(r.type),
+                    severity=AlertSeverity(r.severity),
+                    message=r.message,
+                    triggered_at=r.triggered_at,
+                    acknowledged=r.acknowledged,
+                )
+                for r in rows
+            ]
