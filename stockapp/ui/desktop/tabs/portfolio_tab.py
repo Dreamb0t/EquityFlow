@@ -224,6 +224,8 @@ class PortfolioTab(QWidget):
                 child_item.setData(0, Qt.ItemDataRole.UserRole, p.id)
                 group_item.addChild(child_item)
 
+        self._add_total_row(display_currency)
+
         for col in range(self.table.columnCount()):
             self.table.resizeColumnToContents(col)
 
@@ -237,33 +239,90 @@ class PortfolioTab(QWidget):
         item.setForeground(PROFIT_COLUMN, brush)
         item.setForeground(PROFIT_PCT_COLUMN, brush)
 
+    def _position_value(
+        self, position: Position, display_currency: str
+    ) -> Optional[tuple[float, float]]:
+        """(market_value, cost_value) for one lot, in the display currency, or
+        None if its live price hasn't been fetched yet or a conversion rate
+        failed. Cost basis converts from the lot's own recorded currency
+        (what the user says they paid); market value converts from the
+        ticker's native trading currency — these can differ (see Position's
+        docstring on FX-hedged purchases), so each is converted separately."""
+        market = self._market_prices.get(_normalized_ticker(position.ticker))
+        if market is None:
+            return None
+        price_native, native_currency = market
+        try:
+            market_rate = self._currency_service.get_rate(native_currency, display_currency)
+            cost_rate = self._currency_service.get_rate(position.currency, display_currency)
+        except Exception:
+            return None
+        market_value = price_native * market_rate * position.shares
+        cost_value = position.avg_cost * cost_rate * position.shares
+        return market_value, cost_value
+
     def _group_profit(
         self, positions: list[Position], display_currency: str
     ) -> Optional[tuple[float, float]]:
         """Combined profit/loss across every lot of one ticker, in the display
-        currency. Cost basis converts from each lot's own recorded currency
-        (what the user says they paid); market value converts from the
-        ticker's native trading currency — these can differ (see Position's
-        docstring on FX-hedged purchases), so each is converted separately."""
+        currency."""
         total_market = 0.0
         total_cost = 0.0
         for p in positions:
-            market = self._market_prices.get(_normalized_ticker(p.ticker))
-            if market is None:
+            values = self._position_value(p, display_currency)
+            if values is None:
                 return None
-            price_native, native_currency = market
-            try:
-                market_rate = self._currency_service.get_rate(native_currency, display_currency)
-                cost_rate = self._currency_service.get_rate(p.currency, display_currency)
-            except Exception:
-                return None
-            total_market += price_native * market_rate * p.shares
-            total_cost += p.avg_cost * cost_rate * p.shares
+            total_market += values[0]
+            total_cost += values[1]
 
         if total_cost <= 0:
             return None
         profit = total_market - total_cost
         return profit, profit / total_cost * 100
+
+    def _add_total_row(self, display_currency: str) -> None:
+        """A trailing row summing every position — same columns as the rest
+        of the table. "Avg Cost"/"Currency" are repurposed here for the
+        combined money spent (in the display currency, since it's summed
+        across lots that may each be in a different native currency)."""
+        if not self._rows:
+            return
+
+        total_market = 0.0
+        total_cost = 0.0
+        priced_count = 0
+        for position in self._rows:
+            values = self._position_value(position, display_currency)
+            if values is None:
+                continue
+            priced_count += 1
+            total_market += values[0]
+            total_cost += values[1]
+
+        total_shares = sum(p.shares for p in self._rows)
+        has_totals = priced_count > 0 and total_cost > 0
+        profit = None
+        if has_totals:
+            profit_amount = total_market - total_cost
+            profit = (profit_amount, profit_amount / total_cost * 100)
+
+        total_item = QTreeWidgetItem(
+            [
+                "Total",
+                f"{total_shares:g}",
+                f"{total_cost:.2f}" if priced_count > 0 else "—",
+                display_currency if priced_count > 0 else "",
+                "",
+                self._format_signed(profit[0], display_currency) if profit else "—",
+                f"{profit[1]:+.1f}%" if profit else "—",
+            ]
+        )
+        bold_font = total_item.font(0)
+        bold_font.setBold(True)
+        for col in range(len(COLUMNS)):
+            total_item.setFont(col, bold_font)
+        self._color_profit_cells(total_item, profit)
+        self.table.addTopLevelItem(total_item)
 
     @staticmethod
     def _format_signed(amount: float, currency: str) -> str:

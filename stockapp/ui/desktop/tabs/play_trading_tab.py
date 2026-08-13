@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import (
-    QLabel,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -74,13 +73,8 @@ class PlayTradingTab(QWidget):
         remove_button = QPushButton("Remove selected")
         remove_button.clicked.connect(self._remove_selected)
 
-        # Combined total across every simulated position — sum of current
-        # position value and sum of profit, not just per-row figures.
-        self.summary_label = QLabel()
-
         layout = QVBoxLayout()
         layout.addWidget(self.table)
-        layout.addWidget(self.summary_label)
         layout.addWidget(refresh_button)
         layout.addWidget(remove_button)
         self.setLayout(layout)
@@ -96,7 +90,7 @@ class PlayTradingTab(QWidget):
         self._rows = self._service.list_trades()
         display_currency = self._app_state.display_currency
 
-        self.table.setRowCount(len(self._rows))
+        self.table.setRowCount(len(self._rows) + (1 if self._rows else 0))
         for row, trade in enumerate(self._rows):
             key = self._key(trade)
             name = self._names.get(key, str(trade.ticker))
@@ -122,7 +116,7 @@ class PlayTradingTab(QWidget):
                     item.setForeground(QBrush(color))
                 self.table.setItem(row, col, item)
 
-        self._update_summary(display_currency)
+        self._add_total_row(display_currency)
 
     def _trade_value(
         self, trade: PaperTrade, display_currency: str
@@ -154,10 +148,13 @@ class PlayTradingTab(QWidget):
         profit = market_value - cost_value
         return profit, profit / cost_value * 100
 
-    def _update_summary(self, display_currency: str) -> None:
+    def _add_total_row(self, display_currency: str) -> None:
+        """A trailing row summing every position — same columns as the rest
+        of the table. "Entry Price"/"Entry Currency" are repurposed here for
+        the combined money spent, and "Current Price" for combined current
+        value (both in the display currency, since they're summed across
+        trades that may each be in a different native currency)."""
         if not self._rows:
-            self.summary_label.setText("No simulated positions yet.")
-            self.summary_label.setStyleSheet("")
             return
 
         total_market = 0.0
@@ -171,23 +168,34 @@ class PlayTradingTab(QWidget):
             total_market += values[0]
             total_cost += values[1]
 
-        if priced_count == 0 or total_cost <= 0:
-            self.summary_label.setText(
-                f'{len(self._rows)} position(s) — click "Refresh values" for totals.'
-            )
-            self.summary_label.setStyleSheet("")
-            return
+        total_shares = sum(t.shares for t in self._rows)
+        has_totals = priced_count > 0 and total_cost > 0
+        profit = None
+        if has_totals:
+            profit_amount = total_market - total_cost
+            profit = (profit_amount, profit_amount / total_cost * 100)
 
-        total_profit = total_market - total_cost
-        total_profit_pct = total_profit / total_cost * 100
-        priced_note = "" if priced_count == len(self._rows) else f" ({priced_count}/{len(self._rows)} priced)"
-        self.summary_label.setText(
-            f"Total position value: {total_market:.2f} {display_currency}  ·  "
-            f"Total profit: {self._format_signed(total_profit, display_currency)} "
-            f"({total_profit_pct:+.1f}%){priced_note}"
-        )
-        color = PROFIT_COLOR if total_profit >= 0 else LOSS_COLOR
-        self.summary_label.setStyleSheet(f"color: {color.name()}; font-weight: bold;")
+        row = len(self._rows)
+        values = [
+            "Total",
+            "",
+            f"{total_shares:g}",
+            f"{total_cost:.2f}" if priced_count > 0 else "—",
+            display_currency if priced_count > 0 else "",
+            f"{total_market:.2f} {display_currency}" if priced_count > 0 else "—",
+            self._format_signed(profit[0], display_currency) if profit else "—",
+            f"{profit[1]:+.1f}%" if profit else "—",
+            "",
+        ]
+        bold_font = QFont()
+        bold_font.setBold(True)
+        for col, value in enumerate(values):
+            item = QTableWidgetItem(value)
+            item.setFont(bold_font)
+            if col in (PROFIT_COLUMN, PROFIT_PCT_COLUMN) and profit:
+                color = PROFIT_COLOR if profit[0] >= 0 else LOSS_COLOR
+                item.setForeground(QBrush(color))
+            self.table.setItem(row, col, item)
 
     @staticmethod
     def _format_signed(amount: float, currency: str) -> str:
