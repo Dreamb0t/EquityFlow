@@ -34,6 +34,18 @@ class Ticker:
         return f"{self.symbol}.{self.exchange}" if self.exchange else self.symbol
 
 
+@dataclass(frozen=True)
+class SymbolMatch:
+    """One result from a ticker/company-name search — lets the user pick the
+    right exchange listing for a company that trades on several (e.g. NVO on
+    NYSE vs NOVO-B.CO on Copenhagen) instead of guessing a suffix."""
+
+    symbol: str
+    exchange: Optional[str]
+    name: str
+    exchange_name: str = ""
+
+
 @dataclass
 class PricePoint:
     ticker: Ticker

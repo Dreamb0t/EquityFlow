@@ -1,4 +1,10 @@
 <!-- Scrape virk.dk for balance sheet info -->
 
--Issue with 1 day overview
--Make it a full dashboard with the graph (remove empty space in the top of the screen)
+# Issues Fixed
+- Different exchange timeszone (issue with visualization on graph for stocks on different exchanges)
+- The app only looked up prices of american stocks, so it couldnt visualize danish stocks
+- Issue where the accumulated position wouldnt combine, due to case sensitivity
+
+# Features
+- Added user friendly auto finish stock name
+- Added color for profit and loss

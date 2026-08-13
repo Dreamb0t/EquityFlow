@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from stockapp.core.interfaces import PriceScraper
-from stockapp.core.models import PricePoint, Ticker
+from stockapp.core.models import PricePoint, SymbolMatch, Ticker
 
 
 class YFinancePriceScraper(PriceScraper):
@@ -116,3 +116,47 @@ class YFinancePriceScraper(PriceScraper):
             pass
 
         return "USD"
+
+    def get_name(self, ticker: Ticker) -> str:
+        import yfinance as yf
+
+        yf_ticker = yf.Ticker(str(ticker))
+        try:
+            info = yf_ticker.info
+            name = info.get("longName") or info.get("shortName")
+            if name:
+                return name
+        except Exception:
+            pass
+        return str(ticker)
+
+    def search_symbols(self, query: str) -> list[SymbolMatch]:
+        import yfinance as yf
+
+        query = query.strip()
+        if len(query) < 2:
+            return []
+
+        try:
+            quotes = yf.Search(query, max_results=8).quotes
+        except Exception:
+            return []
+
+        matches = []
+        for quote in quotes:
+            yahoo_symbol = quote.get("symbol")
+            if not yahoo_symbol:
+                continue
+            if "." in yahoo_symbol:
+                symbol, exchange = yahoo_symbol.rsplit(".", 1)
+            else:
+                symbol, exchange = yahoo_symbol, None
+            matches.append(
+                SymbolMatch(
+                    symbol=symbol,
+                    exchange=exchange,
+                    name=quote.get("longname") or quote.get("shortname") or yahoo_symbol,
+                    exchange_name=quote.get("exchDisp") or quote.get("exchange") or "",
+                )
+            )
+        return matches

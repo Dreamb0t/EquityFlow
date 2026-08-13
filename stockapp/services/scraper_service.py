@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from stockapp.core.interfaces import BalanceSheetScraper, PriceScraper, Repository
-from stockapp.core.models import PricePoint, Ticker
+from stockapp.core.models import PricePoint, SymbolMatch, Ticker
 
 
 class ScraperService:
@@ -23,6 +23,7 @@ class ScraperService:
         self._price_scraper = price_scraper
         self._bs_scraper = balance_sheet_scraper
         self._currency_cache: dict[Ticker, str] = {}
+        self._name_cache: dict[Ticker, str] = {}
 
     def tracked_tickers(self) -> list[Ticker]:
         positions = {p.ticker for p in self._repo.list_positions()}
@@ -37,10 +38,13 @@ class ScraperService:
         self._repo.save_price_points(points)
 
     def fetch_intraday(self, ticker: Ticker, interval: str = "5m") -> list[PricePoint]:
-        """Live minute-level bars for today. Deliberately NOT cached in the
-        repository — price_points there holds daily bars, and mixing
-        granularities in one table would corrupt the daily-based analytics
-        (moving averages, day-over-day alerts)."""
+        """Live 5-minute bars for today, for a precise intraday curve. The
+        chart widget thins the x-axis tick labels down to a handful of
+        marks — this is the underlying point density, not what's shown on
+        the axis. Deliberately NOT cached in the repository — price_points
+        there holds daily bars, and mixing granularities in one table would
+        corrupt the daily-based analytics (moving averages, day-over-day
+        alerts)."""
         today = date.today()
         tomorrow = today + timedelta(days=1)
         return self._price_scraper.get_price_history(
@@ -53,12 +57,24 @@ class ScraperService:
         scrapers/ directly, matching the rest of the app's layering."""
         return self._price_scraper.get_latest_price(ticker)
 
+    def search_symbols(self, query: str) -> list[SymbolMatch]:
+        """Passthrough for the add-position autocomplete — kept on this
+        service so the UI layer never talks to scrapers/ directly."""
+        return self._price_scraper.search_symbols(query)
+
     def get_ticker_currency(self, ticker: Ticker) -> str:
         """The currency a ticker actually trades in, cached for the process
         lifetime (a company's listing currency doesn't change)."""
         if ticker not in self._currency_cache:
             self._currency_cache[ticker] = self._price_scraper.get_currency(ticker)
         return self._currency_cache[ticker]
+
+    def get_ticker_name(self, ticker: Ticker) -> str:
+        """Human-readable company name, cached for the process lifetime (a
+        listed company's name doesn't change during a session)."""
+        if ticker not in self._name_cache:
+            self._name_cache[ticker] = self._price_scraper.get_name(ticker)
+        return self._name_cache[ticker]
 
     def refresh_balance_sheet(self, ticker: Ticker) -> None:
         snapshots = self._bs_scraper.get_balance_sheet_history(ticker)

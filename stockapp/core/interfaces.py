@@ -22,6 +22,7 @@ from stockapp.core.models import (
     BalanceSheetSnapshot,
     PricePoint,
     Position,
+    SymbolMatch,
     Ticker,
     WatchlistItem,
 )
@@ -43,6 +44,19 @@ class PriceScraper(ABC):
     def get_currency(self, ticker: Ticker) -> str:
         """ISO currency code the ticker actually trades in (e.g. 'USD', 'DKK') —
         used to convert live/historical prices into the user's display currency."""
+        ...
+
+    @abstractmethod
+    def search_symbols(self, query: str) -> list[SymbolMatch]:
+        """Ticker/company-name search for the add-position autocomplete — lets
+        the user pick the exchange listing they mean instead of guessing a
+        Yahoo suffix."""
+        ...
+
+    @abstractmethod
+    def get_name(self, ticker: Ticker) -> str:
+        """Human-readable company name (e.g. 'Novo Nordisk A/S'), for display
+        next to the ticker in the portfolio table."""
         ...
 
 
