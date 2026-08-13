@@ -17,6 +17,7 @@ import matplotlib.dates as mdates
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import FixedLocator
+from PyQt6.QtWidgets import QSizePolicy
 
 from stockapp.services.dashboard_service import DashboardSeries
 
@@ -25,15 +26,38 @@ from stockapp.services.dashboard_service import DashboardSeries
 INTRADAY_SESSION = timedelta(hours=8)
 INTRADAY_TICK_COUNT = 5
 
+# Yahoo Finance-style dark theme: black background, green close line.
+BACKGROUND_COLOR = "#000000"
+GRID_COLOR = "#2a2a2a"
+TEXT_COLOR = "#e0e0e0"
+CLOSE_COLOR = "#00c805"
+MOVING_AVG_COLOR = "#8a8d93"
+
 
 class PriceChartWidget(FigureCanvasQTAgg):
     def __init__(self):
         self._figure = Figure(figsize=(6, 4))
+        self._figure.patch.set_facecolor(BACKGROUND_COLOR)
         super().__init__(self._figure)
         self._ax = self._figure.add_subplot(111)
+        # Claim any extra space in the parent layout instead of staying at
+        # its small default size hint — otherwise a tall window leaves the
+        # chart squeezed and dead space collects around the other widgets.
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def _apply_theme(self) -> None:
+        self._ax.set_facecolor(BACKGROUND_COLOR)
+        self._ax.grid(True, color=GRID_COLOR, linewidth=0.6)
+        for spine in self._ax.spines.values():
+            spine.set_color(GRID_COLOR)
+        self._ax.tick_params(colors=TEXT_COLOR)
+        self._ax.xaxis.label.set_color(TEXT_COLOR)
+        self._ax.yaxis.label.set_color(TEXT_COLOR)
+        self._ax.title.set_color(TEXT_COLOR)
 
     def plot_series(self, series: DashboardSeries, currency_code: str, rate: float = 1.0) -> None:
         self._ax.clear()
+        self._apply_theme()
 
         if not series.points:
             self._ax.set_title(f"{series.ticker} — no data")
@@ -45,15 +69,22 @@ class PriceChartWidget(FigureCanvasQTAgg):
         moving_avg = [m * rate for m in series.moving_avg]
 
         ticker_label = str(series.ticker)
-        self._ax.plot(timestamps, closes, label=f"{ticker_label} Close")
+        self._ax.plot(
+            timestamps, closes, label=f"{ticker_label} Close", color=CLOSE_COLOR, linewidth=1.6
+        )
         if moving_avg:
             self._ax.plot(
-                timestamps, moving_avg, label=f"{ticker_label} Moving avg", linestyle="--"
+                timestamps,
+                moving_avg,
+                label=f"{ticker_label} Moving avg",
+                linestyle="--",
+                color=MOVING_AVG_COLOR,
+                linewidth=1.0,
             )
 
         self._ax.set_title(f"{series.ticker} — {series.total_pct_change:+.1f}%")
         self._ax.set_ylabel(currency_code)
-        self._ax.legend()
+        self._ax.legend(facecolor=BACKGROUND_COLOR, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
 
         if series.intraday:
             # Plot every 5-minute point for a precise curve, but keep the

@@ -1,16 +1,19 @@
 """
 Portfolio tab: positions grouped by stock (one expandable row per ticker,
 showing combined shares and profit/loss; expand to see the individual buy
-lots), plus a pie chart of allocation by market value. Talks only to
-PortfolioService, ScraperService (for live prices) and CurrencyService/
-AppState (for display-currency conversion) — no direct DB or scraper access.
+lots), plus a pie chart of allocation by market value. Adding new stocks
+lives in the Stocks tab (search + choose Portfolio/Play Trading/both) — this
+tab only views, edits and removes positions that are already there. Talks
+only to PortfolioService, ScraperService (for live prices) and
+CurrencyService/AppState (for display-currency conversion) — no direct DB or
+scraper access.
 """
 
 from __future__ import annotations
 
 from typing import Callable, Optional
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -18,7 +21,6 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
-    QListWidget,
     QMessageBox,
     QPushButton,
     QSplitter,
@@ -29,12 +31,13 @@ from PyQt6.QtWidgets import (
 )
 
 from stockapp.analysis.portfolio_analysis import compute_distribution
-from stockapp.core.models import Position, SymbolMatch, Ticker
+from stockapp.core.models import Position, Ticker
 from stockapp.services.app_state import AppState
 from stockapp.services.currency_service import SUPPORTED_CURRENCIES, CurrencyService
 from stockapp.services.portfolio_service import PortfolioService
 from stockapp.services.scraper_service import ScraperService
 from stockapp.ui.desktop.widgets.pie_chart_widget import PortfolioPieChartWidget
+
 
 def _normalized_ticker(ticker: Ticker) -> Ticker:
     """Canonical form used for grouping/caching, so two positions in the same
@@ -76,12 +79,11 @@ class PortfolioTab(QWidget):
 
         self._rows: list[Position] = []
         self._editing_id: Optional[int] = None
-        self._symbol_matches: list[SymbolMatch] = []
 
         # Live price/name data, filled in by "Refresh values" — kept separate
         # from _rows (which just mirrors the DB) since fetching them is a
         # network call we don't want to trigger on every routine refresh(),
-        # e.g. after every add/edit.
+        # e.g. after every edit.
         self._market_prices: dict[Ticker, tuple[float, str]] = {}
         self._names: dict[Ticker, str] = {}
 
@@ -91,34 +93,10 @@ class PortfolioTab(QWidget):
         self.table.setHeaderLabels(COLUMNS)
         self.table.setSelectionBehavior(QTreeWidget.SelectionBehavior.SelectRows)
 
-        # --- add/edit form ---
+        # --- edit form: hidden until "Edit selected lot" is clicked. New
+        # positions are added from the Stocks tab, not here. ---
         self.symbol_input = QLineEdit()
-        self.symbol_input.setPlaceholderText("e.g. AAPL or Novo Nordisk")
-        self.symbol_input.textEdited.connect(self._on_symbol_text_edited)
-
-        # Debounced so we search on a pause in typing, not every keystroke.
-        self._symbol_search_timer = QTimer(self)
-        self._symbol_search_timer.setSingleShot(True)
-        self._symbol_search_timer.timeout.connect(self._run_symbol_search)
-
-        # Search results, one per matching exchange listing (e.g. a company
-        # dual-listed as "NVO" on NYSE and "NOVO-B.CO" on Copenhagen shows up
-        # as two separate rows here) — click one to fill in both the symbol
-        # and exchange fields correctly instead of guessing a Yahoo suffix.
-        self.symbol_suggestions = QListWidget()
-        self.symbol_suggestions.setMaximumHeight(110)
-        self.symbol_suggestions.setVisible(False)
-        self.symbol_suggestions.itemClicked.connect(self._apply_symbol_suggestion)
-
-        symbol_column = QVBoxLayout()
-        symbol_column.setContentsMargins(0, 0, 0, 0)
-        symbol_column.addWidget(self.symbol_input)
-        symbol_column.addWidget(self.symbol_suggestions)
-        symbol_field = QWidget()
-        symbol_field.setLayout(symbol_column)
-
         self.exchange_input = QLineEdit()
-        self.exchange_input.setPlaceholderText("optional, e.g. CO for Copenhagen")
         self.shares_input = QDoubleSpinBox()
         self.shares_input.setRange(0.0001, 1_000_000_000)
         self.shares_input.setDecimals(4)
@@ -128,34 +106,45 @@ class PortfolioTab(QWidget):
         self.currency_input = QComboBox()
         self.currency_input.addItems(SUPPORTED_CURRENCIES)
 
-        self.submit_button = QPushButton("Add position")
-        self.submit_button.clicked.connect(self._submit)
-        self.cancel_edit_button = QPushButton("Cancel edit")
-        self.cancel_edit_button.clicked.connect(self._cancel_edit)
-        self.cancel_edit_button.setVisible(False)
-        edit_button = QPushButton("Edit selected lot")
-        edit_button.clicked.connect(self._start_edit)
-        remove_button = QPushButton("Remove selected lot")
-        remove_button.clicked.connect(self._remove_selected)
-
         form = QFormLayout()
-        form.addRow("Symbol", symbol_field)
+        form.addRow("Symbol", self.symbol_input)
         form.addRow("Exchange (optional)", self.exchange_input)
         form.addRow("Shares", self.shares_input)
         form.addRow("Avg cost", self.avg_cost_input)
         form.addRow("Currency", self.currency_input)
 
-        button_row = QHBoxLayout()
-        button_row.addWidget(self.submit_button)
-        button_row.addWidget(self.cancel_edit_button)
-        button_row.addWidget(edit_button)
-        button_row.addWidget(remove_button)
-        button_row.addStretch()
+        self.save_button = QPushButton("Save changes")
+        self.save_button.clicked.connect(self._save_changes)
+        self.cancel_edit_button = QPushButton("Cancel edit")
+        self.cancel_edit_button.clicked.connect(self._cancel_edit)
+
+        edit_button_row = QHBoxLayout()
+        edit_button_row.addWidget(self.save_button)
+        edit_button_row.addWidget(self.cancel_edit_button)
+        edit_button_row.addStretch()
+
+        self.edit_panel = QWidget()
+        edit_panel_layout = QVBoxLayout()
+        edit_panel_layout.setContentsMargins(0, 0, 0, 0)
+        edit_panel_layout.addLayout(form)
+        edit_panel_layout.addLayout(edit_button_row)
+        self.edit_panel.setLayout(edit_panel_layout)
+        self.edit_panel.setVisible(False)
+
+        edit_button = QPushButton("Edit selected lot")
+        edit_button.clicked.connect(self._start_edit)
+        remove_button = QPushButton("Remove selected lot")
+        remove_button.clicked.connect(self._remove_selected)
+
+        action_button_row = QHBoxLayout()
+        action_button_row.addWidget(edit_button)
+        action_button_row.addWidget(remove_button)
+        action_button_row.addStretch()
 
         left = QVBoxLayout()
         left.addWidget(self.table)
-        left.addLayout(form)
-        left.addLayout(button_row)
+        left.addWidget(self.edit_panel)
+        left.addLayout(action_button_row)
         left_widget = QWidget()
         left_widget.setLayout(left)
 
@@ -178,7 +167,6 @@ class PortfolioTab(QWidget):
         self.setLayout(layout)
 
         self._app_state.on_change(self._on_currency_changed)
-        self.currency_input.setCurrentText(self._app_state.display_currency)
         self.refresh()
 
     # --- table population ---
@@ -282,8 +270,10 @@ class PortfolioTab(QWidget):
         sign = "+" if amount >= 0 else ""
         return f"{sign}{amount:.2f} {currency}"
 
-    # --- add / edit form ---
-    def _submit(self) -> None:
+    # --- edit form ---
+    def _save_changes(self) -> None:
+        if self._editing_id is None:
+            return  # the panel is only ever shown while editing a lot
         symbol = self.symbol_input.text().strip().upper()
         if not symbol:
             QMessageBox.warning(self, "Missing symbol", "Enter a ticker symbol.")
@@ -293,17 +283,12 @@ class PortfolioTab(QWidget):
         avg_cost = self.avg_cost_input.value()
         currency = self.currency_input.currentText()
 
-        if self._editing_id is None:
-            self._service.add_position(symbol, shares, avg_cost, currency, exchange)
-        else:
-            existing = next((p for p in self._rows if p.id == self._editing_id), None)
-            opened_at = existing.opened_at if existing else None
-            self._service.update_position(
-                self._editing_id, symbol, shares, avg_cost, currency, exchange, opened_at
-            )
-            self._cancel_edit()
-
-        self._clear_form()
+        existing = next((p for p in self._rows if p.id == self._editing_id), None)
+        opened_at = existing.opened_at if existing else None
+        self._service.update_position(
+            self._editing_id, symbol, shares, avg_cost, currency, exchange, opened_at
+        )
+        self._cancel_edit()
         self._changed()
 
     def _selected_position(self) -> Optional[Position]:
@@ -331,65 +316,11 @@ class PortfolioTab(QWidget):
         self.shares_input.setValue(position.shares)
         self.avg_cost_input.setValue(position.avg_cost)
         self.currency_input.setCurrentText(position.currency)
-        self.submit_button.setText("Save changes")
-        self.cancel_edit_button.setVisible(True)
-        self._hide_symbol_suggestions()
+        self.edit_panel.setVisible(True)
 
     def _cancel_edit(self) -> None:
         self._editing_id = None
-        self.submit_button.setText("Add position")
-        self.cancel_edit_button.setVisible(False)
-        self._clear_form()
-
-    def _clear_form(self) -> None:
-        self.symbol_input.clear()
-        self.exchange_input.clear()
-        self.shares_input.setValue(self.shares_input.minimum())
-        self.avg_cost_input.setValue(self.avg_cost_input.minimum())
-        self.currency_input.setCurrentText(self._app_state.display_currency)
-        self._hide_symbol_suggestions()
-
-    # --- symbol autocomplete ---
-    def _on_symbol_text_edited(self, _text: str) -> None:
-        # Restart the debounce window on every keystroke; only the last one
-        # (350ms after typing pauses) actually triggers a search.
-        self._symbol_search_timer.start(350)
-
-    def _run_symbol_search(self) -> None:
-        query = self.symbol_input.text().strip()
-        if len(query) < 2:
-            self._hide_symbol_suggestions()
-            return
-
-        try:
-            matches = self._scraper_service.search_symbols(query)
-        except Exception:
-            matches = []  # best-effort — don't interrupt manual entry
-
-        self._symbol_matches = matches
-        self.symbol_suggestions.clear()
-        for match in matches:
-            display = f"{match.symbol}.{match.exchange}" if match.exchange else match.symbol
-            label = f"{display}  —  {match.name}"
-            if match.exchange_name:
-                label += f"  ({match.exchange_name})"
-            self.symbol_suggestions.addItem(label)
-        self.symbol_suggestions.setVisible(bool(matches))
-
-    def _apply_symbol_suggestion(self, item) -> None:
-        row = self.symbol_suggestions.row(item)
-        if row < 0 or row >= len(self._symbol_matches):
-            return
-        match = self._symbol_matches[row]
-        self.symbol_input.setText(match.symbol)
-        self.exchange_input.setText(match.exchange or "")
-        self._hide_symbol_suggestions()
-
-    def _hide_symbol_suggestions(self) -> None:
-        self._symbol_search_timer.stop()
-        self.symbol_suggestions.clear()
-        self.symbol_suggestions.setVisible(False)
-        self._symbol_matches = []
+        self.edit_panel.setVisible(False)
 
     def _remove_selected(self) -> None:
         position = self._selected_position()
@@ -466,7 +397,6 @@ class PortfolioTab(QWidget):
         self.pie_chart.plot_distribution(compute_distribution(values))
 
     def _on_currency_changed(self) -> None:
-        self.currency_input.setCurrentText(self._app_state.display_currency)
         # Profit depends on the display currency, so re-render — no need to
         # refetch prices, just re-convert them.
         self.refresh()

@@ -86,11 +86,18 @@ class DashboardTab(QWidget):
         layout = QVBoxLayout()
         layout.addLayout(top_row)
         layout.addWidget(self.stats_label)
-        layout.addWidget(self.chart)
+        layout.addWidget(self.chart, 1)  # only the chart absorbs extra space
         self.setLayout(layout)
 
         self.reload_tickers()
         self._app_state.on_change(self._on_currency_changed)
+
+        # Fetch once on startup so the chart isn't blank until the user
+        # clicks the button — but only if there's actually a ticker to plot
+        # (an empty portfolio/watchlist would otherwise pop the "no ticker"
+        # warning dialog on every launch).
+        if self.ticker_select.count() > 0:
+            self._fetch_and_plot()
 
     def reload_tickers(self) -> None:
         tickers = {p.ticker for p in self._portfolio_service.list_positions()}

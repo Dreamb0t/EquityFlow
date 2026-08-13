@@ -18,6 +18,7 @@ from stockapp.data.repository import SqlRepository
 from stockapp.scrapers.balance_sheet_scraper import YFinanceBalanceSheetScraper
 from stockapp.scrapers.fx_scraper import YFinanceFxRateProvider
 from stockapp.scrapers.price_scraper import YFinancePriceScraper
+from stockapp.scrapers.screener import YFinanceGrowthScreener
 from stockapp.services.app_state import AppState
 from stockapp.services.currency_service import CurrencyService
 
@@ -27,6 +28,7 @@ class Container:
         self.repository = SqlRepository()
         self.price_scraper = YFinancePriceScraper()
         self.balance_sheet_scraper = YFinanceBalanceSheetScraper()
+        self.growth_screener = YFinanceGrowthScreener()
         self.currency_service = CurrencyService(YFinanceFxRateProvider())
         self.app_state = AppState()
         self.in_app_notifier = InAppNotifier()

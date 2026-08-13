@@ -15,6 +15,7 @@ from stockapp.core.models import (
     AlertSeverity,
     AlertType,
     BalanceSheetSnapshot,
+    PaperTrade,
     PricePoint,
     Position,
     Ticker,
@@ -24,6 +25,7 @@ from stockapp.data.database import get_session
 from stockapp.data.orm_models import (
     AlertRow,
     BalanceSheetRow,
+    PaperTradeRow,
     PositionRow,
     PricePointRow,
     WatchlistRow,
@@ -251,3 +253,37 @@ class SqlRepository(Repository):
                 )
                 for r in rows
             ]
+
+    # --- Paper trades ("Play Trading") ---
+    def add_paper_trade(self, trade: PaperTrade) -> int:
+        with get_session() as s:
+            row = PaperTradeRow(
+                symbol=trade.ticker.symbol,
+                exchange=trade.ticker.exchange,
+                shares=trade.shares,
+                entry_price=trade.entry_price,
+                entry_currency=trade.entry_currency,
+                opened_at=trade.opened_at,
+            )
+            s.add(row)
+            s.flush()
+            return row.id
+
+    def list_paper_trades(self) -> list[PaperTrade]:
+        with get_session() as s:
+            rows = s.query(PaperTradeRow).all()
+            return [
+                PaperTrade(
+                    ticker=Ticker(r.symbol, r.exchange),
+                    shares=r.shares,
+                    entry_price=r.entry_price,
+                    entry_currency=r.entry_currency or "USD",
+                    opened_at=r.opened_at,
+                    id=r.id,
+                )
+                for r in rows
+            ]
+
+    def remove_paper_trade(self, trade_id: int) -> None:
+        with get_session() as s:
+            s.query(PaperTradeRow).filter_by(id=trade_id).delete()

@@ -20,6 +20,8 @@ from typing import Iterable, Optional
 from stockapp.core.models import (
     Alert,
     BalanceSheetSnapshot,
+    GrowthCandidate,
+    PaperTrade,
     PricePoint,
     Position,
     SymbolMatch,
@@ -57,6 +59,15 @@ class PriceScraper(ABC):
     def get_name(self, ticker: Ticker) -> str:
         """Human-readable company name (e.g. 'Novo Nordisk A/S'), for display
         next to the ticker in the portfolio table."""
+        ...
+
+
+class StockScreener(ABC):
+    @abstractmethod
+    def find_growth_candidates(self, limit: int = 20) -> list[GrowthCandidate]:
+        """Screens the market for stocks with strong growth indicators (recent
+        momentum + sustained 52-week appreciation), for the Guided Trading
+        tab's recommendations."""
         ...
 
 
@@ -140,3 +151,14 @@ class Repository(ABC):
 
     @abstractmethod
     def list_alerts(self, since: Optional[datetime] = None) -> list[Alert]: ...
+
+    # Paper trades ("Play Trading") — simulated positions added from Guided
+    # Trading recommendations, tracked separately from real Positions.
+    @abstractmethod
+    def add_paper_trade(self, trade: PaperTrade) -> int: ...
+
+    @abstractmethod
+    def list_paper_trades(self) -> list[PaperTrade]: ...
+
+    @abstractmethod
+    def remove_paper_trade(self, trade_id: int) -> None: ...

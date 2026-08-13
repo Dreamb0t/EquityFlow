@@ -70,6 +70,18 @@ class BalanceSheetRow(Base):
     raw: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class PaperTradeRow(Base):
+    __tablename__ = "paper_trades"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String, index=True)
+    exchange: Mapped[str | None] = mapped_column(String, nullable=True)
+    shares: Mapped[float] = mapped_column(Float)
+    entry_price: Mapped[float] = mapped_column(Float)
+    entry_currency: Mapped[str] = mapped_column(String, default="USD", server_default="USD")
+    opened_at: Mapped[date] = mapped_column(Date)
+
+
 class AlertRow(Base):
     __tablename__ = "alerts"
 

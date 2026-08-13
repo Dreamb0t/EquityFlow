@@ -108,3 +108,34 @@ class Alert:
     message: str
     triggered_at: datetime
     acknowledged: bool = False
+
+
+@dataclass(frozen=True)
+class GrowthCandidate:
+    """One result from the growth screener — a stock flagged as having
+    strong growth indicators (recent momentum + sustained 52-week
+    appreciation), for the Guided Trading tab's recommendations."""
+
+    ticker: Ticker
+    name: str
+    price: float
+    currency: str
+    day_change_pct: float
+    year_change_pct: float
+    growth_score: float
+
+
+@dataclass
+class PaperTrade:
+    """A simulated ('Play Trading') position added from a Guided Trading
+    recommendation — tracks hypothetical performance without real money.
+    `entry_currency` is the ticker's native currency at the time it was
+    added (taken straight from the screener quote), mirroring how
+    Position.currency can differ from a ticker's home exchange currency."""
+
+    ticker: Ticker
+    shares: float
+    entry_price: float
+    entry_currency: str
+    opened_at: date
+    id: Optional[int] = None
