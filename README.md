@@ -1,94 +1,139 @@
 # EquityFlow
 
-EquityFlow is an application designed to give users a simple and centralized overview of their stocks and portfolio.
+EquityFlow is a desktop app for tracking stocks: a live dashboard, an editable
+portfolio with profit/loss tracking, a watchlist, price/balance-sheet alerts,
+and two tools for exploring new ideas — Guided Trading (growth-stock
+recommendations) and Play Trading (a paper-trading sandbox to try them out
+before risking real money).
 
-The application collects financial data from companies, visualizes stock performance over time, and provides alerts when important changes or irregularities occur. Users can create watchlists, track stocks they own, and monitor their positions from a single dashboard.
+> **Disclaimer:** EquityFlow is for informational and educational purposes
+> only. It is not financial advice, and nothing in the app is a
+> recommendation to buy or sell any security.
 
-The goal of EquityFlow is to make it easier to understand what is happening with the stocks you own or follow without having to manually gather information from multiple sources.
+## Getting started
 
-## Features
+**Requirements:** Python 3.10+ and an internet connection (live prices are
+fetched from Yahoo Finance).
 
-### Must Have
+```bash
+pip install -r requirements.txt
+python main.py
+```
 
-#### Financial Data Scraping
-- Web scrape company financial information, including balance sheets.
-- Collect and store financial data for analysis.
-- Keep historical financial data to identify changes over time.
+On first run, EquityFlow creates a local SQLite database at
+`~/.stockapp/stockapp.db` — no setup required. Your portfolio, watchlist,
+alerts, and play trades all live there.
 
-#### Stock Performance Dashboard
-- Visualize stock price growth over time.
-- Display stock performance using graphs and timelines.
-- Combine stock performance with relevant company financial information.
-- Provide a clear overview of individual stocks.
+### Optional configuration
 
-#### Alerts
-- Price alerts when a stock reaches a user-defined threshold.
-- Alerts for irregularities or significant changes in company balance sheets.
-- Notify users when important financial or market changes are detected.
+Settings are read from environment variables (or a `.env` file in the project
+root) prefixed with `STOCKAPP_`. Everything has a sensible default; the only
+one most people will ever touch is email alerts:
 
-#### User Profiles & Portfolio
-- Create and manage personal watchlists.
-- Add owned stocks to a personal portfolio.
-- Track positions, including the number of shares and purchase price.
-- Provide an overview of the user's current holdings.
+| Variable | Purpose | Default |
+|---|---|---|
+| `STOCKAPP_DATABASE_URL` | Where the SQLite DB lives | `~/.stockapp/stockapp.db` |
+| `STOCKAPP_DISPLAY_CURRENCY` | Currency shown on first run | `USD` |
+| `STOCKAPP_PRICE_MOVE_ALERT_PCT` | % move that triggers a price alert | `5.0` |
+| `STOCKAPP_ALERT_CHECK_INTERVAL_MINUTES` | How often the background checker runs | `30` |
+| `STOCKAPP_SMTP_HOST`, `STOCKAPP_SMTP_PORT`, `STOCKAPP_SMTP_USERNAME`, `STOCKAPP_SMTP_PASSWORD` | SMTP server for email alerts | unset (email disabled) |
+| `STOCKAPP_ALERT_EMAIL_TO`, `STOCKAPP_ALERT_EMAIL_FROM` | Email alert addresses | unset |
 
-### Should Have
+Email alerts are entirely optional — without SMTP configured, alerts still
+work, they just show up in-app instead of by email.
 
-#### Basic Analysis
-- Provide basic analysis based on financial and historical stock data.
-- Highlight important changes and trends.
-- Present relevant metrics in an easy-to-understand format.
+## The display currency
 
-#### Shareable Stock Profiles
-- Allow users to share individual stock profiles.
-- Allow users to share stock overviews with others.
+The toolbar at the top has a currency picker (USD, EUR, DKK, GBP, SEK, NOK).
+It converts every price shown across every tab — it doesn't change what
+currency a stock actually trades in, or what currency you recorded a
+purchase in; those are tracked separately per position so nothing is lost in
+translation.
 
-### Could Have
+## Tour of the tabs
 
-#### Stock-Related News
-- Scrape and aggregate relevant news for specific stocks.
-- Display recent news alongside stock and financial information.
-- Connect news events with changes in stock performance where possible.
+### Dashboard
 
-#### Trading Capabilities
-- Allow users to buy and sell stocks through the application.
-- Integrate with a suitable brokerage or trading API.
+Pick a ticker (from your portfolio or watchlist) and a timeframe — 1 Day, 5
+Days, 1 Month, 6 Months, 1 Year, or a custom number of days — then click
+**Fetch latest data**. The 1-day view plots 5-minute intraday bars across the
+full trading session; longer timeframes plot daily bars. The chart fetches
+automatically once when the app starts, so you're not staring at a blank
+graph.
 
-## Project Goal
+### Stocks
 
-The primary goal of EquityFlow is to create a clear and easy-to-use application where users can quickly understand what is happening with the stocks they own or are interested in.
+The only place new stocks get added. Start typing a symbol or company name
+and pick a match from the suggestions — this matters for companies listed on
+multiple exchanges (e.g. Novo Nordisk trades as `NVO` on the NYSE and
+`NOVO-B.CO` on Copenhagen; picking the wrong one gets you the wrong trading
+hours and currency). Enter shares, price, and currency, then choose where it
+goes: **Portfolio**, **Play Trading**, or both at once.
 
-Instead of visiting multiple websites to find stock prices, financial statements, company information, and news, EquityFlow aims to bring the relevant information together in one place.
+### Portfolio
 
-## Development Priorities
+Your real holdings, grouped by stock — expand a row to see the individual
+buy lots (so buying the same stock at different prices over time stays
+readable). Click **Refresh values** to pull live prices and see profit/loss
+per stock and overall (green for gains, red for losses), plus an allocation
+pie chart. Select a specific lot to edit or remove it. Adding new positions
+happens in the Stocks tab, not here.
 
-Development will initially focus on:
+### Watchlist
 
-1. Collecting reliable financial and stock data.
-2. Building the stock performance dashboard.
-3. Implementing user profiles, watchlists, and portfolio tracking.
-4. Creating price and financial-data alerts.
-5. Adding basic stock analysis.
+Stocks you're following but don't own — with an optional note and target
+price, for keeping an eye on something without it affecting your portfolio
+totals.
 
-Once the core functionality is working, additional features such as shareable profiles, news aggregation, and trading capabilities can be explored.
+### Alerts
 
-## Roadmap
+A log of triggered alerts: price moves past a threshold, or irregularities
+detected in a company's balance sheet. A background job checks periodically
+while the app is open; **Check now** runs the same check on demand. If SMTP
+is configured, alerts also go out by email — otherwise they just show up
+here.
 
-- [ ] Set up project architecture
-- [ ] Implement company/stock data scraping
-- [ ] Create database for financial and stock data
-- [ ] Build stock dashboard
-- [ ] Add historical price visualization
-- [ ] Implement user profiles
-- [ ] Implement watchlists
-- [ ] Implement portfolio and position tracking
-- [ ] Add price alerts
-- [ ] Add financial irregularity detection
-- [ ] Add basic stock analysis
-- [ ] Add shareable stock profiles
-- [ ] Add stock-related news
-- [ ] Investigate trading API integration
+### Guided Trading
 
-## Disclaimer
+Stocks screened for strong growth indicators (recent momentum, weighted
+below sustained 52-week appreciation — "high growth," not "today's biggest
+mover"). Pick a recommendation and add a chosen number of shares to Play
+Trading or Portfolio, or bulk-add every current recommendation to Play
+Trading at once (10 shares each, or your own share count).
 
-EquityFlow is intended for informational and educational purposes. It is not intended to provide financial advice or recommendations to buy or sell securities.
+### Play Trading
+
+A paper-trading sandbox — positions added here (from Guided Trading or the
+Stocks tab) are tracked against live prices exactly like Portfolio, but
+without spending real money. Good for testing out a recommendation before
+committing to it for real.
+
+## Project structure
+
+The codebase is layered so the desktop UI can eventually be swapped for (or
+joined by) a web UI without touching the business logic:
+
+```
+stockapp/
+  core/        domain models + interfaces (the abstractions everything else depends on)
+  scrapers/    concrete data sources (yfinance-based price/FX/screener, balance sheets)
+  data/        SQLite persistence (SQLAlchemy)
+  services/    application logic — the only thing the UI is allowed to call
+  analysis/    pure calculation functions (growth %, volatility, screener ranking, ...)
+  alerts/      notification delivery (in-app, email)
+  scheduler/   background job that refreshes prices and checks alerts periodically
+  ui/desktop/  PyQt6 desktop app (tabs, widgets, main window)
+```
+
+See [docs/Architecture.md](docs/Architecture.md) for more detail on the
+layering, and [docs/webscraper_notes.md](docs/webscraper_notes.md) for how
+the data-fetching layer works.
+
+## Tests
+
+```bash
+pytest
+```
+
+Tests cover the pure-logic modules (`analysis/`) and the SQLite repository —
+no network access required.
