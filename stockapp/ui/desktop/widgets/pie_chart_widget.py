@@ -33,9 +33,9 @@ def _text_color_for(fill: str) -> str:
 
     r, g, b = (channel(c) for c in to_rgb(fill))
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    # Black and white contrast equally at L≈0.179; the cutoff sits a bit
-    # above that so near-ties go to white, which reads better on mid tones.
-    return "black" if luminance > 0.2 else "white"
+    # Black and white contrast equally at L≈0.179. Default to black: only
+    # fills clearly darker than that tie point get white text.
+    return "black" if luminance > 0.15 else "white"
 
 
 class PortfolioPieChartWidget(FigureCanvasQTAgg):
