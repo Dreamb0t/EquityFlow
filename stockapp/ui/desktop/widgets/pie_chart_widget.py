@@ -7,6 +7,7 @@ it has nothing to do with the price timeline.
 from __future__ import annotations
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.colors import to_rgb
 from matplotlib.figure import Figure
 
 # Fixed, visually distinct palette so a given slot's color stays stable across
@@ -19,6 +20,22 @@ _PALETTE = [
 
 # Slices smaller than this get no in-slice percentage (the legend still has it).
 _MIN_INLINE_PCT = 5.0
+
+# Dark slice borders stay visible against both the white background and the
+# light slice colors, unlike white ones.
+_EDGE_COLOR = "#1f1f1f"
+
+
+def _text_color_for(fill: str) -> str:
+    """Black on light fills, white on dark ones (WCAG relative luminance)."""
+    def channel(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (channel(c) for c in to_rgb(fill))
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    # Black and white contrast equally at L≈0.179; the cutoff sits a bit
+    # above that so near-ties go to white, which reads better on mid tones.
+    return "black" if luminance > 0.2 else "white"
 
 
 class PortfolioPieChartWidget(FigureCanvasQTAgg):
@@ -43,16 +60,20 @@ class PortfolioPieChartWidget(FigureCanvasQTAgg):
         # Labels live in a legend rather than on the rim: rim labels collide
         # as soon as a few small slices sit next to each other. Percentages
         # are drawn inside a slice only when it's big enough to hold them.
-        wedges, _texts, _autotexts = self._ax.pie(
+        wedges, _texts, autotexts = self._ax.pie(
             values,
             colors=colors,
             startangle=90,
             counterclock=False,
             autopct=lambda pct: f"{pct:.1f}%" if pct >= _MIN_INLINE_PCT else "",
             pctdistance=0.7,
-            textprops={"color": "white", "fontsize": 9},
-            wedgeprops={"linewidth": 1, "edgecolor": "white"},
+            textprops={"fontsize": 10, "fontweight": "bold"},
+            wedgeprops={"linewidth": 1.5, "edgecolor": _EDGE_COLOR},
         )
+        # Pick black or white text per slice, whichever contrasts more with
+        # that slice's fill — white-on-yellow/teal was nearly unreadable.
+        for color, text in zip(colors, autotexts):
+            text.set_color(_text_color_for(color))
         self._ax.legend(
             wedges,
             [f"{label} ({pct:.1f}%)" for label, pct in zip(labels, values)],
