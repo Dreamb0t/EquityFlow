@@ -17,6 +17,9 @@ _PALETTE = [
     "#86BCB6", "#D37295", "#FABFD2", "#B6992D", "#499894",
 ]
 
+# Slices smaller than this get no in-slice percentage (the legend still has it).
+_MIN_INLINE_PCT = 5.0
+
 
 class PortfolioPieChartWidget(FigureCanvasQTAgg):
     def __init__(self):
@@ -37,13 +40,28 @@ class PortfolioPieChartWidget(FigureCanvasQTAgg):
         values = list(percentages.values())
         colors = [_PALETTE[i % len(_PALETTE)] for i in range(len(labels))]
 
-        self._ax.pie(
+        # Labels live in a legend rather than on the rim: rim labels collide
+        # as soon as a few small slices sit next to each other. Percentages
+        # are drawn inside a slice only when it's big enough to hold them.
+        wedges, _texts, _autotexts = self._ax.pie(
             values,
-            labels=[f"{label} ({pct:.1f}%)" for label, pct in zip(labels, values)],
             colors=colors,
             startangle=90,
+            counterclock=False,
+            autopct=lambda pct: f"{pct:.1f}%" if pct >= _MIN_INLINE_PCT else "",
+            pctdistance=0.7,
+            textprops={"color": "white", "fontsize": 9},
             wedgeprops={"linewidth": 1, "edgecolor": "white"},
+        )
+        self._ax.legend(
+            wedges,
+            [f"{label} ({pct:.1f}%)" for label, pct in zip(labels, values)],
+            loc="center left",
+            bbox_to_anchor=(1.0, 0.5),
+            frameon=False,
+            fontsize=9,
         )
         self._ax.set_title("Portfolio allocation")
         self._ax.axis("equal")
+        self._figure.tight_layout()
         self.draw()
