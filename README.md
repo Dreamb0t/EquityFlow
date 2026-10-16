@@ -24,6 +24,21 @@ On first run, EquityFlow creates a local SQLite database at
 `~/.stockapp/stockapp.db` — no setup required. Your portfolio, watchlist,
 alerts, and play trades all live there.
 
+### Standalone executable (Windows)
+
+To get a single `EquityFlow.exe` you can double-click without Python
+installed, run:
+
+```bash
+build_exe.bat
+```
+
+The result is `dist/EquityFlow.exe`. It's a self-contained build (~150 MB, a
+few seconds to start up the first time while it unpacks), uses the same
+`~/.stockapp/` database as `python main.py`, and still needs internet access
+for live prices. `dist/` and `build/` are git-ignored — rebuild after code
+changes rather than committing the binary.
+
 ### Optional configuration
 
 Settings are read from environment variables (or a `.env` file in the project

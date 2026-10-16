@@ -3,4 +3,7 @@ __pycache__/
 .pytest_cache/
 .env
 *.db
+build/
+dist/
+*.spec
 docs/webscraper_notes.md

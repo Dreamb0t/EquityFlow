@@ -1,0 +1,4 @@
+-r requirements.txt
+
+# Packaging (see build_exe.bat)
+pyinstaller>=6.0
