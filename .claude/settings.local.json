@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_timeframes.py -q)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('stockapp/ui/desktop/widgets/chart_widget.py'\\).read\\(\\)\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(pip show *)",
+      "Bash(python -c \"import yfinance as yf; print\\([x for x in dir\\(yf\\) if 'earch' in x or 'ooku' in x]\\)\")",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(timeout 8 python -c ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('stockapp/ui/desktop/tabs/guided_trading_tab.py', encoding='utf-8'\\).read\\(\\)\\)\")",
+      "Bash(pip install *)",
+      "Bash(tasklist)",
+      "Bash(rm -f __TRACKED_VAR__/seed.db)",
+      "Bash(STOCKAPP_DATABASE_URL=sqlite:///__TRACKED_VAR__/seed.db python -c ' *)",
+      "Bash(PYTHONPATH=. python __TRACKED_VAR__/pie_render.py __TRACKED_VAR__/pie_before.png)",
+      "Bash(PYTHONPATH=. python __TRACKED_VAR__/pie_render.py __TRACKED_VAR__/pie_after.png)",
+      "Bash(PYTHONPATH=. python __TRACKED_VAR__/pie_render.py __TRACKED_VAR__/pie_contrast.png)"
+    ]
+  }
+}

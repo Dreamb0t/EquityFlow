@@ -36,6 +36,7 @@ def _text_color_for(fill: str) -> str:
     # Black and white contrast equally at L≈0.179. Default to black: only
     # fills clearly darker than that tie point get white text.
     return "black" if luminance > 0.15 else "white"
+    #maybe remove, and default to black
 
 
 class PortfolioPieChartWidget(FigureCanvasQTAgg):
